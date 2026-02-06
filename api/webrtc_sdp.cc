@@ -145,6 +145,7 @@ const char kAttributeXGoogleFlag[] = "x-google-flag";
 const char kValueConference[] = "conference";
 
 const char kAttributeRtcpRemoteEstimate[] = "remote-net-estimate";
+const char kAttributeSframe[] = "sframe";
 
 // StringBuilder doesn't have a << overload for chars, while
 // split and tokenize_first both take a char delimiter. To
@@ -1283,6 +1284,13 @@ void BuildRtpContentAttributes(const MediaContentDescription* media_desc,
 
   if (media_desc->remote_estimate()) {
     InitAttrLine(kAttributeRtcpRemoteEstimate, &os);
+    AddLine(os.str(), message);
+  }
+
+  // draft-ietf-avtcore-rtp-sframe
+  // a=sframe
+  if (media_desc->use_sframe()) {
+    InitAttrLine(kAttributeSframe, &os);
     AddLine(os.str(), message);
   }
 
@@ -2660,6 +2668,8 @@ bool ParseContent(absl::string_view message,
         media_desc->set_rtcp_reduced_size(true);
       } else if (HasAttribute(*line, kAttributeRtcpRemoteEstimate)) {
         media_desc->set_remote_estimate(true);
+      } else if (HasAttribute(*line, kAttributeSframe)) {
+        media_desc->set_use_sframe(true);
       } else if (HasAttribute(*line, kAttributeSsrcGroup)) {
         if (!ParseSsrcGroupAttribute(*line, &ssrc_groups, error)) {
           return false;

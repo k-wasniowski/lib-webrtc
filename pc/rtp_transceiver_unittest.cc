@@ -1038,6 +1038,72 @@ TEST_F(RtpTransceiverTestWithFakeCall,
   transceiver->StopStandard();
 }
 
+// SFrame tests
+
+TEST_F(RtpTransceiverUnifiedPlanTest, UseSFrameIsNulloptByDefault) {
+  scoped_refptr<RtpTransceiver> transceiver = CreateTransceiver(
+      MockSender(MediaType::AUDIO), MockReceiver(MediaType::AUDIO));
+
+  EXPECT_EQ(transceiver->UseSFrame(), std::nullopt);
+}
+
+TEST_F(RtpTransceiverUnifiedPlanTest, SetUseSFrameSetsValueToTrue) {
+  scoped_refptr<RtpTransceiver> transceiver = CreateTransceiver(
+      MockSender(MediaType::AUDIO), MockReceiver(MediaType::AUDIO));
+
+  EXPECT_TRUE(transceiver->SetUseSFrame().ok());
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(true));
+}
+
+TEST_F(RtpTransceiverUnifiedPlanTest, SetUseSFrameCanBeCalledMultipleTimes) {
+  scoped_refptr<RtpTransceiver> transceiver = CreateTransceiver(
+      MockSender(MediaType::AUDIO), MockReceiver(MediaType::AUDIO));
+
+  EXPECT_TRUE(transceiver->SetUseSFrame().ok());
+  EXPECT_TRUE(transceiver->SetUseSFrame().ok());
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(true));
+}
+
+TEST_F(RtpTransceiverUnifiedPlanTest,
+       SetUseSFrameFailsAfterExplicitlySetToFalse) {
+  scoped_refptr<RtpTransceiver> transceiver = CreateTransceiver(
+      MockSender(MediaType::AUDIO), MockReceiver(MediaType::AUDIO));
+
+  // Simulate the transceiver having been explicitly set to false (e.g. via
+  // set_use_sframe during SDP application).
+  transceiver->set_use_sframe(false);
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(false));
+
+  RTCError error = transceiver->SetUseSFrame();
+  EXPECT_FALSE(error.ok());
+  EXPECT_EQ(error.type(), RTCErrorType::INVALID_MODIFICATION);
+  // Value should remain false.
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(false));
+}
+
+TEST_F(RtpTransceiverUnifiedPlanTest, SetUseSFrameDirectlyViaSetUseMethod) {
+  scoped_refptr<RtpTransceiver> transceiver = CreateTransceiver(
+      MockSender(MediaType::AUDIO), MockReceiver(MediaType::AUDIO));
+
+  transceiver->set_use_sframe(true);
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(true));
+
+  transceiver->set_use_sframe(false);
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(false));
+
+  transceiver->set_use_sframe(std::nullopt);
+  EXPECT_EQ(transceiver->UseSFrame(), std::nullopt);
+}
+
+TEST_F(RtpTransceiverUnifiedPlanTest, SetUseSFrameWorksForVideoTransceiver) {
+  scoped_refptr<RtpTransceiver> transceiver = CreateTransceiver(
+      MockSender(MediaType::VIDEO), MockReceiver(MediaType::VIDEO));
+
+  EXPECT_EQ(transceiver->UseSFrame(), std::nullopt);
+  EXPECT_TRUE(transceiver->SetUseSFrame().ok());
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(true));
+}
+
 }  // namespace
 
 }  // namespace webrtc

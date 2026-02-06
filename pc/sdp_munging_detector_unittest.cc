@@ -1580,4 +1580,70 @@ TEST_F(SdpMungingTest, MungeBundleGroupContent) {
       ElementsAre(Pair(SdpMungingType::kBundle, 1)));
 }
 
+TEST_F(SdpMungingTest, SFrameAttributeAdded) {
+  auto pc = CreatePeerConnection();
+  pc->AddAudioTrack("audio_track", {});
+
+  std::unique_ptr<SessionDescriptionInterface> offer = pc->CreateOffer();
+
+  auto& contents = offer->description()->contents();
+  ASSERT_THAT(contents, SizeIs(1));
+  auto* media_description = contents[0].media_description();
+  ASSERT_THAT(media_description, Not(IsNull()));
+  EXPECT_FALSE(media_description->use_sframe());
+  media_description->set_use_sframe(true);
+
+  RTCError error;
+  EXPECT_FALSE(pc->SetLocalDescription(std::move(offer), &error));
+  EXPECT_THAT(
+      metrics::Samples("WebRTC.PeerConnection.SdpMunging.Offer.Initial"),
+      ElementsAre(Pair(SdpMungingType::kSFrame, 1)));
+  EXPECT_THAT(
+      metrics::Samples("WebRTC.PeerConnection.SdpMunging.SdpOutcome.Rejected"),
+      ElementsAre(Pair(SdpMungingType::kSFrame, 1)));
+  EXPECT_THAT(
+      metrics::Samples("WebRTC.PeerConnection.SdpMunging.Outcome"),
+      ElementsAre(Pair(static_cast<int>(SdpMungingOutcome::kRejected), 1)));
+}
+
+TEST_F(SdpMungingTest, SFrameAttributeRemoved) {
+  auto pc = CreatePeerConnection();
+  auto transceiver = pc->AddTransceiver(MediaType::AUDIO);
+  transceiver->SetUseSFrame();
+
+  std::unique_ptr<SessionDescriptionInterface> offer = pc->CreateOffer();
+
+  auto& contents = offer->description()->contents();
+  ASSERT_THAT(contents, SizeIs(1));
+  auto* media_description = contents[0].media_description();
+  ASSERT_THAT(media_description, Not(IsNull()));
+  EXPECT_TRUE(media_description->use_sframe());
+  media_description->set_use_sframe(false);
+
+  RTCError error;
+  EXPECT_FALSE(pc->SetLocalDescription(std::move(offer), &error));
+  EXPECT_THAT(
+      metrics::Samples("WebRTC.PeerConnection.SdpMunging.Offer.Initial"),
+      ElementsAre(Pair(SdpMungingType::kSFrame, 1)));
+  EXPECT_THAT(
+      metrics::Samples("WebRTC.PeerConnection.SdpMunging.SdpOutcome.Rejected"),
+      ElementsAre(Pair(SdpMungingType::kSFrame, 1)));
+  EXPECT_THAT(
+      metrics::Samples("WebRTC.PeerConnection.SdpMunging.Outcome"),
+      ElementsAre(Pair(static_cast<int>(SdpMungingOutcome::kRejected), 1)));
+}
+
+TEST_F(SdpMungingTest, SFrameMungingIsAlwaysRejected) {
+  EXPECT_FALSE(
+      IsSdpMungingAllowed(SdpMungingType::kSFrame, CreateTestFieldTrials()));
+  // Even with deny list, SFrame munging is always rejected.
+  EXPECT_FALSE(IsSdpMungingAllowed(
+      SdpMungingType::kSFrame,
+      CreateTestFieldTrials("WebRTC-NoSdpMangleReject/Enabled/")));
+  // Even with allow list for testing, SFrame munging is always rejected.
+  EXPECT_FALSE(IsSdpMungingAllowed(
+      SdpMungingType::kSFrame,
+      CreateTestFieldTrials("WebRTC-NoSdpMangleAllowForTesting/Enabled,35/")));
+}
+
 }  // namespace webrtc

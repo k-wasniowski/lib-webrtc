@@ -249,6 +249,10 @@ class MediaContentDescription {
     receive_rids_ = rids;
   }
 
+  // Whether SFrame encryption is enabled for this media section.
+  bool use_sframe() const { return use_sframe_; }
+  void set_use_sframe(bool use_sframe) { use_sframe_ = use_sframe; }
+
   // Codecs should be in preference order (most preferred codec first).
   const std::vector<Codec>& codecs() const { return codecs_; }
   void set_codecs(const std::vector<Codec>& codecs) { codecs_ = codecs; }
@@ -297,6 +301,7 @@ class MediaContentDescription {
 
   SimulcastDescription simulcast_;
   std::vector<RidDescription> receive_rids_;
+  bool use_sframe_ = false;
 
   // Copy function that returns a raw pointer. Caller will assert ownership.
   // Should only be called by the Clone() function. Must be implemented

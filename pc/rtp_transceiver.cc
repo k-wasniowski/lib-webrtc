@@ -545,16 +545,16 @@ RTCError RtpTransceiver::SetChannel(
         if (transport) {
           transport_name = transport->transport_name();
         }
-        channel->SetFirstPacketReceivedCallback([thread = thread_, flag = flag,
-                                                 this]() mutable {
-          thread->PostTask(
-              SafeTask(std::move(flag), [this]() { OnFirstPacketReceived(); }));
-        });
-        channel->SetFirstPacketSentCallback([thread = thread_, flag = flag,
-                                             this]() mutable {
-          thread->PostTask(
-              SafeTask(std::move(flag), [this]() { OnFirstPacketSent(); }));
-        });
+        channel->SetFirstPacketReceivedCallback(
+            [thread = thread_, flag = flag, this]() mutable {
+              thread->PostTask(SafeTask(std::move(flag),
+                                        [this]() { OnFirstPacketReceived(); }));
+            });
+        channel->SetFirstPacketSentCallback(
+            [thread = thread_, flag = flag, this]() mutable {
+              thread->PostTask(
+                  SafeTask(std::move(flag), [this]() { OnFirstPacketSent(); }));
+            });
         channel->SetPacketReceivedCallback_n([this, flag = flag]() {
           RTC_DCHECK_RUN_ON(context()->network_thread());
           OnPacketReceived(flag);
@@ -747,9 +747,8 @@ PLAN_B_ONLY bool RtpTransceiver::RemoveReceiverPlanB(
   }
 
   (*it)->internal()->Stop();
-  context()->worker_thread()->BlockingCall([&]() {
-    (*it)->internal()->SetMediaChannel(nullptr);
-  });
+  context()->worker_thread()->BlockingCall(
+      [&]() { (*it)->internal()->SetMediaChannel(nullptr); });
 
   receivers_.erase(it);
   return true;
@@ -897,6 +896,28 @@ std::optional<RtpTransceiverDirection> RtpTransceiver::current_direction()
 
 std::optional<RtpTransceiverDirection> RtpTransceiver::fired_direction() const {
   return fired_direction_;
+}
+
+RTCError RtpTransceiver::SetUseSFrame() {
+  if (use_sframe_.has_value() && use_sframe_.value() == false) {
+    return LOG_ERROR(
+        RTCError::InvalidModification()
+        << "Cannot set useSFrame to true after it has been set to false.");
+  }
+
+  set_use_sframe(true);
+
+  on_negotiation_needed_();
+
+  return RTCError::OK();
+}
+
+void RtpTransceiver::set_use_sframe(std::optional<bool> use_sframe) {
+  use_sframe_ = use_sframe;
+}
+
+std::optional<bool> RtpTransceiver::UseSFrame() const {
+  return use_sframe_;
 }
 
 bool RtpTransceiver::receptive() const {

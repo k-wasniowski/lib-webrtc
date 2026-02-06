@@ -554,6 +554,23 @@ bool SetCodecsInAnswer(const MediaContentDescription* offer,
   return true;
 }
 
+// Negotiates SFrame support between the offer and the local answerer options.
+// If the offer and answerer disagree (one wants SFrame and the other does not),
+// negotiation fails and std::nullopt is returned.
+std::optional<bool> NegotiateSFrame(
+    const MediaContentDescription* offer,
+    const MediaDescriptionOptions& media_description_options) {
+  bool offer_sframe = offer->use_sframe();
+  bool local_sframe = media_description_options.use_sframe;
+  if (offer_sframe != local_sframe) {
+    RTC_LOG(LS_ERROR) << "SFrame mismatch: offer has use_sframe="
+                      << offer_sframe
+                      << " but local has use_sframe=" << local_sframe;
+    return std::nullopt;
+  }
+  return offer_sframe;
+}
+
 // Create a media content to be answered for the given `sender_options`
 // according to the given session_options.rtcp_mux, session_options.streams,
 // codecs, crypto, and current_streams.  If we don't currently have crypto (in
@@ -608,6 +625,13 @@ bool CreateMediaContentAnswer(
 
   answer->set_direction(NegotiateRtpTransceiverDirection(
       offer->direction(), media_description_options.direction));
+  // Negotiate SFrame support. If the offer and local options disagree, fail.
+  std::optional<bool> use_sframe =
+      NegotiateSFrame(offer, media_description_options);
+  if (!use_sframe.has_value()) {
+    return false;
+  }
+  answer->set_use_sframe(*use_sframe);
 
   return true;
 }
@@ -1215,6 +1239,7 @@ RTCError MediaSessionDescriptionFactory::AddRtpContentForOffer(
   SetMediaProtocol(secure_transport, content_description.get());
 
   content_description->set_direction(media_description_options.direction);
+  content_description->set_use_sframe(media_description_options.use_sframe);
   bool has_codecs = !content_description->codecs().empty();
 
   session_description->AddContent(
