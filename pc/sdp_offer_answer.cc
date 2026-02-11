@@ -863,6 +863,8 @@ MediaDescriptionOptions GetMediaDescriptionOptionsForTransceiver(
       transceiver->filtered_codec_preferences();
   media_description_options.header_extensions =
       transceiver->GetHeaderExtensionsToNegotiate();
+  media_description_options.use_sframe =
+      transceiver->UseSFrame().value_or(false);
   // This behavior is specified in JSEP. The gist is that:
   // 1. The MSID is included if the RtpTransceiver's direction is sendonly or
   //    sendrecv.
@@ -1962,6 +1964,7 @@ RTCError SdpOfferAnswerHandler::ApplyLocalDescription(
         }
         transceiver->set_receptive(
             RtpTransceiverDirectionHasRecv(media_desc->direction()));
+        transceiver->set_use_sframe(media_desc->use_sframe());
       }
       pc_->RunWithObserver([&](auto observer) {
         for (const auto& transceiver : remove_list) {
@@ -2440,6 +2443,20 @@ void SdpOfferAnswerHandler::ApplyRemoteDescriptionUpdateTransceiverState(
       RTC_LOG(LS_INFO) << "Stopping transceiver for MID=" << content->mid()
                        << " since the media section was rejected.";
       transceiver->StopTransceiverProcedure();
+    }
+    // If the local offer included SFrame but the remote answer does not,
+    // stop the transceiver since SFrame cannot be downgraded.
+    if (sdp_type == SdpType::kPrAnswer || sdp_type == SdpType::kAnswer) {
+      const ContentInfo* local_content =
+          FindMediaSectionForTransceiver(transceiver, local_description());
+      if (local_content && !content->rejected &&
+          local_content->media_description()->use_sframe() &&
+          !media_desc->use_sframe() && !transceiver->stopped()) {
+        RTC_LOG(LS_INFO) << "Stopping transceiver for MID=" << content->mid()
+                         << " since the remote answer does not include SFrame.";
+        transceiver->ClearChannel();
+        transceiver->StopTransceiverProcedure();
+      }
     }
     if (!content->rejected && RtpTransceiverDirectionHasRecv(local_direction)) {
       if (!media_desc->streams().empty() &&
@@ -3791,6 +3808,13 @@ bool SdpOfferAnswerHandler::CheckIfNegotiationIsNeeded() {
     // 5.3 If transceiver isn't stopped and is associated with an m= section
     // in description then perform the following checks:
 
+    // If the transceiver's SFrame state differs from the negotiated state
+    // in the current local description, negotiation is needed.
+    if (transceiver->UseSFrame() !=
+        current_local_media_description->use_sframe()) {
+      return true;
+    }
+
     // 5.3.1 If transceiver.[[Direction]] is "sendrecv" or "sendonly", and the
     // associated m= section in description either doesn't contain a single
     // "a=msid" line, or the number of MSIDs from the "a=msid" lines in this
@@ -4221,6 +4245,7 @@ SdpOfferAnswerHandler::AssociateTransceiver(
           /*header_extensions_to_negotiate=*/{}, sender_id, receiver_id);
       transceiver->internal()->set_direction(
           RtpTransceiverDirection::kRecvOnly);
+      transceiver->internal()->set_use_sframe(media_desc->use_sframe());
       if (type == SdpType::kOffer) {
         transceivers()->StableState(transceiver)->set_newly_created();
       }

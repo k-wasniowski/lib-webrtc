@@ -70,6 +70,7 @@ using ::testing::ElementsAre;
 using ::testing::Eq;
 using ::testing::IsTrue;
 using ::testing::NotNull;
+using ::testing::Optional;
 using ::testing::Pair;
 using ::testing::SizeIs;
 
@@ -2514,6 +2515,158 @@ TEST_F(SdpOfferAnswerTest, NegotiatesTransportCcWhenCcfbMissingInBothSections) {
     }
   }
   EXPECT_TRUE(found_transport_cc);
+}
+
+TEST_F(SdpOfferAnswerTest, StopsTransceiverWhenAnswerLacksSFrame) {
+  auto caller = CreatePeerConnection();
+  auto callee = CreatePeerConnection();
+
+  auto transceiver = caller->AddTransceiver(MediaType::AUDIO);
+  transceiver->SetUseSFrame();
+
+  auto offer = caller->CreateOfferAndSetAsLocal();
+  ASSERT_THAT(offer->description()->contents(), SizeIs(1));
+  EXPECT_TRUE(
+      offer->description()->contents()[0].media_description()->use_sframe());
+
+  EXPECT_TRUE(callee->SetRemoteDescription(std::move(offer)));
+  auto answer = callee->CreateAnswerAndSetAsLocal();
+
+  // The answer should naturally have sframe since the offer had it.
+  ASSERT_THAT(answer->description()->contents(), SizeIs(1));
+  EXPECT_TRUE(
+      answer->description()->contents()[0].media_description()->use_sframe());
+
+  // Simulate a remote peer that strips sframe from the answer.
+  answer->description()->contents()[0].media_description()->set_use_sframe(
+      false);
+
+  // SetRemoteDescription should succeed, but the transceiver should be stopped.
+  EXPECT_TRUE(caller->SetRemoteDescription(std::move(answer)));
+  EXPECT_TRUE(transceiver->stopped());
+}
+
+TEST_F(SdpOfferAnswerTest, AcceptsAnswerWithSFrameWhenOfferedWithSFrame) {
+  auto caller = CreatePeerConnection();
+  auto callee = CreatePeerConnection();
+
+  auto transceiver = caller->AddTransceiver(MediaType::AUDIO);
+  transceiver->SetUseSFrame();
+
+  auto offer = caller->CreateOfferAndSetAsLocal();
+  ASSERT_THAT(offer->description()->contents(), SizeIs(1));
+  EXPECT_TRUE(
+      offer->description()->contents()[0].media_description()->use_sframe());
+
+  EXPECT_TRUE(callee->SetRemoteDescription(std::move(offer)));
+  auto answer = callee->CreateAnswerAndSetAsLocal();
+
+  // Answer should naturally have sframe since the offer had it.
+  ASSERT_THAT(answer->description()->contents(), SizeIs(1));
+  EXPECT_TRUE(
+      answer->description()->contents()[0].media_description()->use_sframe());
+
+  EXPECT_TRUE(caller->SetRemoteDescription(std::move(answer)));
+  // Transceiver should not be stopped since sframe matches.
+  EXPECT_FALSE(transceiver->stopped());
+}
+
+TEST_F(SdpOfferAnswerTest, AcceptsAnswerWithoutSFrameWhenOfferedWithoutSFrame) {
+  auto caller = CreatePeerConnection();
+  auto callee = CreatePeerConnection();
+
+  caller->AddTransceiver(MediaType::AUDIO);
+
+  auto offer = caller->CreateOfferAndSetAsLocal();
+  ASSERT_THAT(offer->description()->contents(), SizeIs(1));
+  EXPECT_FALSE(
+      offer->description()->contents()[0].media_description()->use_sframe());
+
+  EXPECT_TRUE(callee->SetRemoteDescription(std::move(offer)));
+  auto answer = callee->CreateAnswerAndSetAsLocal();
+
+  ASSERT_THAT(answer->description()->contents(), SizeIs(1));
+  EXPECT_FALSE(
+      answer->description()->contents()[0].media_description()->use_sframe());
+
+  EXPECT_TRUE(caller->SetRemoteDescription(std::move(answer)));
+}
+
+TEST_F(SdpOfferAnswerTest,
+       SetLocalOfferSyncsTransceiverSFrameFromNulloptToFalse) {
+  auto caller = CreatePeerConnection();
+
+  auto transceiver = caller->AddTransceiver(MediaType::AUDIO);
+  // Before any offer, UseSFrame is nullopt (undefined).
+  EXPECT_EQ(transceiver->UseSFrame(), std::nullopt);
+
+  auto offer = caller->CreateOfferAndSetAsLocal();
+  ASSERT_THAT(offer->description()->contents(), SizeIs(1));
+  EXPECT_FALSE(
+      offer->description()->contents()[0].media_description()->use_sframe());
+
+  // After setting local offer, transceiver should be synced from nullopt to
+  // false (matching the SDP's false).
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(false));
+}
+
+TEST_F(SdpOfferAnswerTest, SetLocalOfferPreservesSFrameTrueOnTransceiver) {
+  auto caller = CreatePeerConnection();
+
+  auto transceiver = caller->AddTransceiver(MediaType::AUDIO);
+  transceiver->SetUseSFrame();
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(true));
+
+  auto offer = caller->CreateOfferAndSetAsLocal();
+  ASSERT_THAT(offer->description()->contents(), SizeIs(1));
+  EXPECT_TRUE(
+      offer->description()->contents()[0].media_description()->use_sframe());
+
+  // After setting local offer, transceiver should remain true.
+  EXPECT_THAT(transceiver->UseSFrame(), Optional(true));
+}
+
+TEST_F(SdpOfferAnswerTest,
+       RemoteOfferWithoutSFrameCreatesTransceiverWithSFrameFalse) {
+  auto caller = CreatePeerConnection();
+  auto callee = CreatePeerConnection();
+
+  caller->AddTransceiver(MediaType::AUDIO);
+
+  auto offer = caller->CreateOfferAndSetAsLocal();
+  ASSERT_THAT(offer->description()->contents(), SizeIs(1));
+  EXPECT_FALSE(
+      offer->description()->contents()[0].media_description()->use_sframe());
+
+  EXPECT_TRUE(callee->SetRemoteDescription(std::move(offer)));
+
+  // Callee's transceiver was created by the remote offer. Since the offer
+  // did not contain the sframe attribute, UseSFrame should be false.
+  auto callee_transceivers = callee->pc()->GetTransceivers();
+  ASSERT_THAT(callee_transceivers, SizeIs(1));
+  EXPECT_THAT(callee_transceivers[0]->UseSFrame(), Optional(false));
+}
+
+TEST_F(SdpOfferAnswerTest,
+       RemoteOfferWithSFrameCreatesTransceiverWithSFrameTrue) {
+  auto caller = CreatePeerConnection();
+  auto callee = CreatePeerConnection();
+
+  auto transceiver = caller->AddTransceiver(MediaType::AUDIO);
+  transceiver->SetUseSFrame();
+
+  auto offer = caller->CreateOfferAndSetAsLocal();
+  ASSERT_THAT(offer->description()->contents(), SizeIs(1));
+  EXPECT_TRUE(
+      offer->description()->contents()[0].media_description()->use_sframe());
+
+  EXPECT_TRUE(callee->SetRemoteDescription(std::move(offer)));
+
+  // Callee's transceiver was created by the remote offer. Since the offer
+  // contained the sframe attribute, UseSFrame should be true.
+  auto callee_transceivers = callee->pc()->GetTransceivers();
+  ASSERT_THAT(callee_transceivers, SizeIs(1));
+  EXPECT_THAT(callee_transceivers[0]->UseSFrame(), Optional(true));
 }
 
 }  // namespace webrtc

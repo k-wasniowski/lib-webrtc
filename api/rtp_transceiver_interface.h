@@ -115,6 +115,10 @@ class RTC_EXPORT RtpTransceiverInterface : public RefCountInterface {
   virtual void SetDirection(RtpTransceiverDirection new_direction);
   virtual RTCError SetDirectionWithError(RtpTransceiverDirection new_direction);
 
+  // Sets whether SFrame should be used for this transceiver.
+  virtual RTCError SetUseSFrame() = 0;
+  virtual std::optional<bool> UseSFrame() const = 0;
+
   // The receptive attributes indicates whether the receiver is expecting to
   // receive RTP data. See [[Receptive]] in
   // https://w3c.github.io/webrtc-pc/#dfn-receptive

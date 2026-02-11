@@ -544,6 +544,13 @@ SdpMungingType DetermineContentsModification(
       return SdpMungingType::kDirection;
     }
 
+    // Validate SFrame attribute.
+    if (last_created_media_description->use_sframe() !=
+        media_description_to_set->use_sframe()) {
+      RTC_LOG(LS_ERROR) << "SDP munging: sframe attribute modified.";
+      return SdpMungingType::kSFrame;
+    }
+
     // Validate media streams.
     if (last_created_media_description->streams().size() !=
         media_description_to_set->streams().size()) {
@@ -732,7 +739,9 @@ bool IsSdpMungingAllowed(SdpMungingType sdp_munging_type,
       return true;
     case SdpMungingType::kNumberOfContents:
       return false;
-    case kDataChannelSctpInit:
+    case SdpMungingType::kSFrame:
+      return false;
+    case SdpMungingType::kDataChannelSctpInit:
       return false;
     default:
       // Handled below.

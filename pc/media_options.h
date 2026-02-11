@@ -12,6 +12,7 @@
 #ifndef PC_MEDIA_OPTIONS_H_
 #define PC_MEDIA_OPTIONS_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -75,6 +76,8 @@ struct MediaDescriptionOptions {
   // Codecs to include in a generated offer or answer.
   // If this is used, session-level codec lists MUST be ignored.
   std::vector<Codec> codecs_to_include;
+  // Whether SFrame encryption is requested for this media section.
+  bool use_sframe = false;
 
  private:
   // Doesn't DCHECK on `type`.

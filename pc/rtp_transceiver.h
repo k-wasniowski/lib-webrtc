@@ -332,6 +332,9 @@ class RtpTransceiver : public RtpTransceiverInterface {
       RtpTransceiverDirection new_direction) override;
   std::optional<RtpTransceiverDirection> current_direction() const override;
   std::optional<RtpTransceiverDirection> fired_direction() const override;
+  RTCError SetUseSFrame() override;
+  void set_use_sframe(std::optional<bool> use_sframe);
+  std::optional<bool> UseSFrame() const override;
   bool receptive() const override;
   RTCError StopStandard() override;
   void StopInternal() override;
@@ -439,6 +442,7 @@ class RtpTransceiver : public RtpTransceiverInterface {
   RtpTransceiverDirection direction_ = RtpTransceiverDirection::kInactive;
   std::optional<RtpTransceiverDirection> current_direction_;
   std::optional<RtpTransceiverDirection> fired_direction_;
+  std::optional<bool> use_sframe_;
   std::optional<std::string> mid_;
   std::optional<std::string> transport_name_ RTC_GUARDED_BY(thread_) =
       std::nullopt;
@@ -494,6 +498,8 @@ PROXY_METHOD1(RTCError, SetDirectionWithError, RtpTransceiverDirection)
 PROXY_CONSTMETHOD0(std::optional<RtpTransceiverDirection>, current_direction)
 PROXY_CONSTMETHOD0(std::optional<RtpTransceiverDirection>, fired_direction)
 PROXY_CONSTMETHOD0(bool, receptive)
+PROXY_METHOD0(RTCError, SetUseSFrame)
+PROXY_CONSTMETHOD0(std::optional<bool>, UseSFrame)
 PROXY_METHOD0(RTCError, StopStandard)
 PROXY_METHOD0(void, StopInternal)
 PROXY_METHOD1(RTCError, SetCodecPreferences, ArrayView<RtpCodecCapability>)
